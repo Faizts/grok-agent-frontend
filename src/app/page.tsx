@@ -21,7 +21,14 @@ export default function LoginPage() {
     try {
       const fn = isRegister ? register : login
       const res = await fn(email, password)
-      setUser({ id: res.user_id, email, token: res.token })
+      setUser({
+        id: res.user_id,
+        email,
+        token: res.token,
+        role: res.role,
+        monthly_budget_usd: res.monthly_budget_usd,
+        spent_this_month_usd: res.spent_this_month_usd,
+      })
       router.push('/chat')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
