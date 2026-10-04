@@ -7,6 +7,10 @@ export interface User {
   id: string
   email: string
   token: string
+  role?: 'admin' | 'user'
+  status?: 'active' | 'suspended'
+  monthly_budget_usd?: number
+  spent_this_month_usd?: number
 }
 
 interface AuthStore {
