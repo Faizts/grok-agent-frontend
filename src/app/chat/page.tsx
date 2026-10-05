@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Bot, Zap, Trash2, MessageSquare } from 'lucide-react'
+import { Plus, Bot, Zap, MessageSquare } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
 import { listAgents, createAgent, createConversation, type Agent } from '@/lib/api'
+import Navbar from '@/components/Navbar'
 
 export default function ChatPage() {
   const router = useRouter()
   const user = useAuthStore((s) => s.user)
-  const logout = useAuthStore((s) => s.logout)
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
@@ -53,22 +53,7 @@ export default function ChatPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
-      {/* Navbar */}
-      <nav className="border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-violet-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">G</span>
-          </div>
-          <span className="font-semibold">GrokAgent</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-zinc-400 text-sm">{user?.email}</span>
-          <button onClick={() => { logout(); router.push('/') }}
-            className="text-zinc-400 hover:text-white text-sm transition-colors">
-            Sign out
-          </button>
-        </div>
-      </nav>
+      <Navbar />
 
       <div className="max-w-4xl mx-auto px-6 py-10">
         <div className="flex items-center justify-between mb-8">
