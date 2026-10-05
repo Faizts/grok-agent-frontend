@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Bot, Brain, Zap, BarChart2, Settings, Shield, LogOut } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'https://api-agent.getvicinify.com/api/v1'
+import { apiFetch } from '@/lib/api'
 
 export default function Navbar() {
   const router = useRouter()
@@ -20,15 +19,11 @@ export default function Navbar() {
       setIsAdmin(true)
       return
     }
-    // Robust fallback: test if user can access admin stats endpoint
+    // Proactive fallback: test if user can access admin stats endpoint
     async function verifyAdmin() {
       try {
-        const res = await fetch(`${API}/admin/stats`, {
-          headers: { Authorization: `Bearer ${user?.token}` },
-        })
-        if (res.ok) {
-          setIsAdmin(true)
-        }
+        await apiFetch('/admin/stats', {}, user?.token)
+        setIsAdmin(true)
       } catch {
         // not admin
       }
@@ -89,6 +84,7 @@ export default function Navbar() {
           onClick={() => { logout(); router.push('/') }}
           className="flex items-center gap-1.5 text-zinc-400 hover:text-white text-sm px-3 py-2
                      rounded-xl hover:bg-zinc-800 transition-colors"
+          title="Sign out"
         >
           <LogOut size={15} />
           <span className="hidden sm:block">Sign out</span>
