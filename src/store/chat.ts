@@ -1,9 +1,4 @@
-'use client'
-
-import { create } from 'zustand'
-
 export type MessageRole = 'user' | 'assistant' | 'tool_call' | 'tool_result'
-
 export interface ChatMessage {
   id: string
   role: MessageRole
@@ -11,52 +6,61 @@ export interface ChatMessage {
   toolName?: string
   toolInput?: unknown
   toolOutput?: string
+  toolCallId?: string
   streaming?: boolean
 }
-
-interface ChatStore {
-  messages: ChatMessage[]
-  isConnected: boolean
-  isThinking: boolean
-  addMessage: (m: ChatMessage) => void
-  appendToLast: (content: string) => void
-  updateLastToolOutput: (output: string) => void
-  setThinking: (v: boolean) => void
-  setConnected: (v: boolean) => void
-  clearMessages: () => void
+export interface StreamEvent {
+  type: string
+  content?: string
+  tool?: string
+  input?: unknown
+  output?: unknown
+  error?: string
+  message?: string
+  tool_call_id?: string
+  call_id?: string
+  id?: string
 }
-
-export const useChatStore = create<ChatStore>((set) => ({
-  messages: [],
-  isConnected: false,
-  isThinking: false,
-
-  addMessage: (m) => set((s) => ({ messages: [...s.messages, m] })),
-
-  appendToLast: (content) =>
-    set((s) => {
-      const msgs = [...s.messages]
-      const last = msgs[msgs.length - 1]
-      if (last && last.role === 'assistant') {
-        msgs[msgs.length - 1] = { ...last, content: last.content + content }
+export function finishMessages(messages: ChatMessage[]): ChatMessage[] {
+  return messages.filter(m => m.role !== 'assistant' || m.content).map(m => ({ ...m, streaming: false }))
+}
+export function applyEvent(messages: ChatMessage[], event: StreamEvent): ChatMessage[] {
+  const id = event.tool_call_id ?? event.call_id ?? event.id
+  if (event.type === 'text') {
+    const last = messages.at(-1)
+    if (last?.role === 'assistant' && last.streaming) {
+      return [...messages.slice(0, -1), { ...last, content: last.content + (event.content ?? '') }]
+    }
+    return [...messages, { id: crypto.randomUUID(), role: 'assistant', content: event.content ?? '', streaming: true }]
+  }
+  if (event.type === 'tool_call') return [...finishMessages(messages), {
+    id: crypto.randomUUID(), role: 'tool_call', content: '', toolName: event.tool,
+    toolInput: event.input, toolCallId: id,
+  }]
+  if (event.type === 'tool_result') {
+    const output = typeof event.output === 'string' ? event.output : JSON.stringify(event.output ?? '')
+    const index = messages.findLastIndex(m => m.role === 'tool_call' && (id ? m.toolCallId === id : m.toolOutput === undefined && (!event.tool || m.toolName === event.tool)))
+    if (index < 0) return [...messages, { id: crypto.randomUUID(), role: 'tool_result', content: output, toolName: event.tool, toolOutput: output }]
+    return messages.map((m, i) => i === index ? { ...m, toolOutput: output } : m)
+  }
+  if (event.type === 'done' || event.type === 'error') return finishMessages(messages)
+  return messages
+}
+interface HistoryMessage { id: string; role: string; content: string; tool_name?: string; tool_call_id?: string; tool_input?: unknown; tool_result?: string }
+export function fromHistory(history: HistoryMessage[]): ChatMessage[] {
+  let messages: ChatMessage[] = []
+  for (const m of history) {
+    if (m.role === 'tool_call') {
+      let input = m.tool_input ?? m.content
+      if (typeof input === 'string' && input) {
+        try { input = JSON.parse(input) } catch {}
       }
-      return { messages: msgs }
-    }),
-
-  updateLastToolOutput: (output) =>
-    set((s) => {
-      const msgs = [...s.messages]
-      // Find the last tool_call and attach output
-      for (let i = msgs.length - 1; i >= 0; i--) {
-        if (msgs[i].role === 'tool_call') {
-          msgs[i] = { ...msgs[i], toolOutput: output }
-          break
-        }
-      }
-      return { messages: msgs }
-    }),
-
-  setThinking: (v) => set({ isThinking: v }),
-  setConnected: (v) => set({ isConnected: v }),
-  clearMessages: () => set({ messages: [] }),
-}))
+      messages.push({ id: m.id, role: 'tool_call', content: '', toolName: m.tool_name, toolInput: input, toolCallId: m.tool_call_id })
+    } else if (m.role === 'tool_result' || m.role === 'tool') {
+      messages = applyEvent(messages, { type: 'tool_result', tool: m.tool_name, output: m.tool_result ?? m.content, tool_call_id: m.tool_call_id })
+    } else if (m.role === 'user' || m.role === 'assistant') {
+      messages.push({ id: m.id, role: m.role, content: m.content, streaming: false })
+    }
+  }
+  return messages
+}
