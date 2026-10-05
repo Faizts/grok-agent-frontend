@@ -20,14 +20,26 @@ export async function apiFetch<T>(
 }
 
 export async function login(email: string, password: string) {
-  return apiFetch<{ token: string; user_id: string }>('/auth/login', {
+  return apiFetch<{
+    token: string
+    user_id: string
+    role?: 'admin' | 'user'
+    monthly_budget_usd?: number
+    spent_this_month_usd?: number
+  }>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   })
 }
 
 export async function register(email: string, password: string) {
-  return apiFetch<{ token: string; user_id: string }>('/auth/register', {
+  return apiFetch<{
+    token: string
+    user_id: string
+    role?: 'admin' | 'user'
+    monthly_budget_usd?: number
+    spent_this_month_usd?: number
+  }>('/auth/register', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   })
