@@ -1,14 +1,40 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Bot, Brain, Zap, BarChart2, Settings, Shield, LogOut } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
 
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'https://api-agent.getvicinify.com/api/v1'
+
 export default function Navbar() {
   const router = useRouter()
   const user   = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    if (!user) return
+    if (user.role === 'admin') {
+      setIsAdmin(true)
+      return
+    }
+    // Robust fallback: test if user can access admin stats endpoint
+    async function verifyAdmin() {
+      try {
+        const res = await fetch(`${API}/admin/stats`, {
+          headers: { Authorization: `Bearer ${user?.token}` },
+        })
+        if (res.ok) {
+          setIsAdmin(true)
+        }
+      } catch {
+        // not admin
+      }
+    }
+    verifyAdmin()
+  }, [user])
 
   const navItems = [
     { href: '/chat',     icon: Bot,      label: 'Agents'    },
@@ -18,7 +44,7 @@ export default function Navbar() {
     { href: '/settings', icon: Settings, label: 'Settings'  },
   ]
 
-  if (user?.role === 'admin') {
+  if (isAdmin || user?.role === 'admin') {
     navItems.push({ href: '/admin', icon: Shield, label: 'Admin Panel' })
   }
 
@@ -54,7 +80,7 @@ export default function Navbar() {
 
       <div className="flex items-center gap-3">
         <span className="text-zinc-500 text-sm hidden sm:block">{user?.email}</span>
-        {user?.role === 'admin' && (
+        {(isAdmin || user?.role === 'admin') && (
           <span className="text-xs bg-amber-900/50 border border-amber-700/60 text-amber-300 px-2 py-0.5 rounded-md font-mono">
             ADMIN
           </span>
