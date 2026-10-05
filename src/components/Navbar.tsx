@@ -7,6 +7,24 @@ import { Bot, Brain, Zap, BarChart2, Settings, Shield, LogOut } from 'lucide-rea
 import { useAuthStore } from '@/store/auth'
 import { apiFetch } from '@/lib/api'
 
+function decodeJwtRole(token?: string): string | null {
+  if (!token) return null
+  try {
+    const base64Url = token.split('.')[1]
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    )
+    const payload = JSON.parse(jsonPayload)
+    return payload.role ?? null
+  } catch {
+    return null
+  }
+}
+
 export default function Navbar() {
   const router = useRouter()
   const user   = useAuthStore((s) => s.user)
@@ -15,11 +33,15 @@ export default function Navbar() {
 
   useEffect(() => {
     if (!user) return
-    if (user.role === 'admin') {
+
+    // 1. Check JWT claim directly client-side
+    const jwtRole = decodeJwtRole(user.token)
+    if (user.role === 'admin' || jwtRole === 'admin') {
       setIsAdmin(true)
       return
     }
-    // Proactive fallback: test if user can access admin stats endpoint
+
+    // 2. Fallback check via API endpoint
     async function verifyAdmin() {
       try {
         await apiFetch('/admin/stats', {}, user?.token)
@@ -39,7 +61,7 @@ export default function Navbar() {
     { href: '/settings', icon: Settings, label: 'Settings'  },
   ]
 
-  if (isAdmin || user?.role === 'admin') {
+  if (isAdmin || user?.role === 'admin' || decodeJwtRole(user?.token) === 'admin') {
     navItems.push({ href: '/admin', icon: Shield, label: 'Admin Panel' })
   }
 
@@ -75,7 +97,7 @@ export default function Navbar() {
 
       <div className="flex items-center gap-3">
         <span className="text-zinc-500 text-sm hidden sm:block">{user?.email}</span>
-        {(isAdmin || user?.role === 'admin') && (
+        {(isAdmin || user?.role === 'admin' || decodeJwtRole(user?.token) === 'admin') && (
           <span className="text-xs bg-amber-900/50 border border-amber-700/60 text-amber-300 px-2 py-0.5 rounded-md font-mono">
             ADMIN
           </span>
