@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Bot, Brain, Zap, BarChart2, Settings, Shield, LogOut } from 'lucide-react'
+import { Bot, Brain, Zap, BarChart2, Settings, LogOut } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
 import { apiFetch } from '@/lib/api'
 
@@ -29,28 +29,16 @@ export default function Navbar() {
   const router = useRouter()
   const user   = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [verifiedToken, setVerifiedToken] = useState<string | null>(null)
+  const isAdmin = !!user && (user.role === 'admin' || decodeJwtRole(user.token) === 'admin' || verifiedToken === user.token)
 
   useEffect(() => {
-    if (!user) return
-
-    // 1. Check JWT claim directly client-side
-    const jwtRole = decodeJwtRole(user.token)
-    if (user.role === 'admin' || jwtRole === 'admin') {
-      setIsAdmin(true)
-      return
-    }
-
-    // 2. Fallback check via API endpoint
-    async function verifyAdmin() {
-      try {
-        await apiFetch('/admin/stats', {}, user?.token)
-        setIsAdmin(true)
-      } catch {
-        // not admin
-      }
-    }
-    verifyAdmin()
+    if (!user || user.role === 'admin' || decodeJwtRole(user.token) === 'admin') return
+    let active = true
+    apiFetch('/admin/stats', {}, user.token).then(() => {
+      if (active) setVerifiedToken(user.token)
+    }).catch(() => { /* The API remains the authorization boundary. */ })
+    return () => { active = false }
   }, [user])
 
   const navItems = [
@@ -62,11 +50,11 @@ export default function Navbar() {
   ]
 
   if (isAdmin || user?.role === 'admin' || decodeJwtRole(user?.token) === 'admin') {
-    navItems.push({ href: '/admin', icon: Shield, label: 'Admin Panel' })
+    // Admin link moved to separate admin app
   }
 
   return (
-    <nav className="border-b border-zinc-800 px-6 py-3 flex items-center justify-between">
+    <nav className="shrink-0 overflow-x-auto border-b border-zinc-800 px-3 py-3 flex items-center justify-between">
       <div className="flex items-center gap-6">
         {/* Logo */}
         <Link href="/chat" className="flex items-center gap-2 shrink-0">
@@ -82,6 +70,8 @@ export default function Navbar() {
             <Link
               key={href}
               href={href}
+              title={label}
+              aria-label={label}
               className={`flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl transition-colors ${
                 href === '/admin'
                   ? 'text-amber-400 bg-amber-950/40 border border-amber-800/50 hover:bg-amber-900/50'

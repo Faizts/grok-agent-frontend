@@ -1,0 +1,12 @@
+# Send only application source, assets, and build configuration.
+**
+!Dockerfile
+!package.json
+!package-lock.json
+!next.config.ts
+!tsconfig.json
+!postcss.config.mjs
+!src/
+!src/**
+!public/
+!public/**

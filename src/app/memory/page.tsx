@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Brain, Trash2, Search, Filter } from 'lucide-react'
+import { Brain, Trash2, Search } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
 import { listAgents, type Agent } from '@/lib/api'
 import { listMemory, deleteMemory, type MemoryItem } from '@/lib/api7'
@@ -28,37 +28,37 @@ export default function MemoryPage() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const [error, setError] = useState('')
   useEffect(() => {
-    if (!user) { router.push('/'); return }
-    loadAgents()
-  }, [user])
+    if (!user) { router.replace('/'); return }
+    let active = true
+    listAgents(user.token).then(data => {
+      if (!active) return
+      setAgents(data ?? [])
+      if (data?.length) setSelectedAgent(data[0].id)
+    }).catch(err => { if (active) setError(String(err)) })
+    return () => { active = false }
+  }, [user, router])
 
   useEffect(() => {
-    if (selectedAgent) loadMemory()
-  }, [selectedAgent, storeFilter])
-
-  async function loadAgents() {
-    if (!user) return
-    const data = await listAgents(user.token)
-    setAgents(data)
-    if (data.length > 0) setSelectedAgent(data[0].id)
-  }
-
-  async function loadMemory() {
     if (!user || !selectedAgent) return
-    setLoading(true)
-    try {
-      const data = await listMemory(user.token, selectedAgent, storeFilter === 'all' ? undefined : storeFilter)
-      setMemories(data)
-    } finally {
-      setLoading(false)
-    }
-  }
+    let active = true
+    listMemory(user.token, selectedAgent, storeFilter === 'all' ? undefined : storeFilter)
+      .then(data => { if (active) setMemories(data ?? []) })
+      .catch(err => { if (active) setError(String(err)) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [user, selectedAgent, storeFilter])
 
   async function handleDelete(memId: string) {
     if (!user || !selectedAgent) return
+    setError('')
+    try {
     await deleteMemory(user.token, selectedAgent, memId)
     setMemories((prev) => prev.filter((m) => m.id !== memId))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Request failed.')
+    }
   }
 
   const filtered = memories.filter((m) =>
@@ -68,6 +68,7 @@ export default function MemoryPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <Navbar />
+      {error && <p role="alert" className="p-3 text-red-300">{error}</p>}
       <div className="max-w-5xl mx-auto px-6 py-10">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { BarChart2, Zap, Brain, CheckCircle, Clock, TrendingUp } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
@@ -48,14 +48,10 @@ export default function UsagePage() {
   const [stats, setStats] = useState<UsageStats | null>(null)
   const [tools, setTools] = useState<ToolStat[]>([])
   const [daily, setDaily] = useState<DailyUsage[]>([])
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (!user) { router.push('/'); return }
-    loadAll()
-  }, [user])
-
-  async function loadAll() {
+  const loadAll = useCallback(async () => {
     if (!user) return
     try {
       const [s, t, d] = await Promise.all([
@@ -63,11 +59,22 @@ export default function UsagePage() {
         getTopTools(user.token),
         getDailyUsage(user.token, 14),
       ])
-      setStats(s); setTools(t); setDaily(d)
+      setStats(s); setTools(t ?? []); setDaily(d ?? [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Request failed.')
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
+
+  useEffect(() => {
+    if (!user) { router.push('/'); return }
+    let active = true
+    void Promise.resolve().then(() => { if (active) return loadAll() })
+    return () => { active = false }
+  }, [user, router, loadAll])
+
+
 
   const maxDailyTokens = Math.max(...daily.map((d) => d.prompt_tokens + d.completion_tokens), 1)
   const maxToolCount   = Math.max(...tools.map((t) => t.count), 1)
@@ -75,6 +82,7 @@ export default function UsagePage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <Navbar />
+      {error && <p role="alert" className="p-3 text-red-300">{error}</p>}
       <div className="max-w-5xl mx-auto px-6 py-10">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">

@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { ApprovalBanner } from '@/components/approvals/ApprovalBanner'
 import './globals.css'
+import { AuthBoundary } from '@/components/AuthBoundary'
 
-const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'GrokAgent — AI with a real computer',
@@ -16,8 +16,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.className} bg-zinc-950 text-white antialiased`}>
-        {children}
+      <body className="bg-zinc-950 text-white antialiased font-sans">
+        <AuthBoundary>
+          {children}
+          <ApprovalBanner />
+        </AuthBoundary>
       </body>
     </html>
   )

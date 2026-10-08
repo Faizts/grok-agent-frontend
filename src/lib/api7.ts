@@ -10,8 +10,9 @@ export function apiUrl(path: string) {
 // ── Skills ────────────────────────────────────────────────────────────────
 
 export interface Skill {
+  builtin?: boolean
   id: string
-  agent_id: string
+  agent_id: string | null
   user_id: string
   name: string
   description: string
@@ -32,7 +33,7 @@ export async function createSkill(token: string, data: {
   description?: string
   content: string
   tags?: string[]
-  agent_id?: string
+  agent_id?: string | null
 }): Promise<Skill> {
   return apiFetch<Skill>('/skills', { method: 'POST', body: JSON.stringify(data) }, token)
 }
@@ -46,7 +47,7 @@ export async function deleteSkill(token: string, id: string): Promise<void> {
 export interface MCPServer {
   id: string
   name: string
-  transport: 'http' | 'stdio'
+  transport: 'http'
   url: string
   command: string
   enabled: boolean
@@ -59,7 +60,7 @@ export async function listMCP(token: string): Promise<MCPServer[]> {
 
 export async function createMCP(token: string, data: {
   name: string
-  transport: 'http' | 'stdio'
+  transport: 'http'
   url?: string
   command?: string
 }): Promise<{ id: string; name: string }> {

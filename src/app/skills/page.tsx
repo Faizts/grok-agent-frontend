@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Zap, Plus, Trash2, Tag, BookOpen, X } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
@@ -11,6 +11,7 @@ export default function SkillsPage() {
   const router = useRouter()
   const user = useAuthStore((s) => s.user)
   const [skills, setSkills] = useState<Skill[]>([])
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [selected, setSelected] = useState<Skill | null>(null)
@@ -22,24 +23,30 @@ export default function SkillsPage() {
   const [tags, setTags] = useState('')
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    if (!user) { router.push('/'); return }
-    load()
-  }, [user])
-
-  async function load() {
+  const load = useCallback(async () => {
     if (!user) return
     try {
       const data = await listSkills(user.token)
-      setSkills(data)
+      setSkills(data ?? [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Request failed.')
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
+
+  useEffect(() => {
+    if (!user) { router.push('/'); return }
+    let active = true
+    void Promise.resolve().then(() => { if (active) return load() })
+    return () => { active = false }
+  }, [user, router, load])
+
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
-    if (!user) return
+    if (!user || saving) return
+    setError('')
     setSaving(true)
     try {
       const sk = await createSkill(user.token, {
@@ -51,6 +58,8 @@ export default function SkillsPage() {
       setSkills((prev) => [sk, ...prev])
       setShowForm(false)
       resetForm()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Request failed.')
     } finally {
       setSaving(false)
     }
@@ -58,9 +67,14 @@ export default function SkillsPage() {
 
   async function handleDelete(id: string) {
     if (!user) return
+    setError('')
+    try {
     await deleteSkill(user.token, id)
     setSkills((prev) => prev.filter((s) => s.id !== id))
     if (selected?.id === id) setSelected(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Request failed.')
+    }
   }
 
   function resetForm() {
@@ -70,6 +84,7 @@ export default function SkillsPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <Navbar />
+      {error && <p role="alert" className="p-3 text-red-300">{error}</p>}
       <div className="max-w-6xl mx-auto px-6 py-10">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -79,7 +94,7 @@ export default function SkillsPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold">Skills</h1>
-              <p className="text-zinc-400 text-sm">Saved workflows your agents can reuse</p>
+              <p className="text-zinc-400 text-sm">Built-in workflows and your imported Markdown skills</p>
             </div>
           </div>
           <button
@@ -118,12 +133,12 @@ export default function SkillsPage() {
                         <BookOpen size={14} className="text-violet-400 shrink-0" />
                         <span className="text-white font-semibold text-sm">{sk.name}</span>
                       </div>
-                      <button
+                      {sk.builtin ? <span className="text-xs text-violet-400">Built-in</span> : <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(sk.id) }}
                         className="text-zinc-600 hover:text-red-400 transition-colors p-1 rounded-lg hover:bg-red-900/20"
                       >
                         <Trash2 size={13} />
-                      </button>
+                      </button>}
                     </div>
                     {sk.description && (
                       <p className="text-zinc-400 text-xs mb-3 line-clamp-2">{sk.description}</p>
@@ -188,6 +203,22 @@ export default function SkillsPage() {
               </button>
             </div>
             <form onSubmit={handleCreate} className="space-y-4">
+              <label className="block text-sm text-zinc-400">
+                Import a Markdown workflow (up to 64 KB)
+                <input type="file" accept=".md,.markdown,text/markdown" className="block mt-2 text-xs" onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  e.target.value = ''
+                  if (!/\.(md|markdown)$/i.test(file.name) || file.size > 65536) { setError('Choose a Markdown file up to 64 KB.'); return }
+                  try {
+                    const text = await file.text()
+                    if (!text.trim()) { setError('The Markdown file is empty.'); return }
+                    setContent(text)
+                    setName(text.match(/^#\s+(.+)$/m)?.[1]?.trim() || file.name.replace(/\.(md|markdown)$/i, ''))
+                    setError('')
+                  } catch { setError('Could not read this file.') }
+                }} />
+              </label>
               <input
                 value={name} onChange={(e) => setName(e.target.value)}
                 placeholder="Skill name" required

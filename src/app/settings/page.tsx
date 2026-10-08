@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Settings, Plus, Trash2, X, ToggleLeft, ToggleRight, Server, Plug } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
@@ -11,36 +11,42 @@ export default function SettingsPage() {
   const router = useRouter()
   const user = useAuthStore((s) => s.user)
   const [servers, setServers] = useState<MCPServer[]>([])
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
 
   // Form state
   const [name, setName] = useState('')
-  const [transport, setTransport] = useState<'http' | 'stdio'>('http')
   const [url, setUrl] = useState('')
-  const [command, setCommand] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const load = useCallback(async () => {
+    if (!user) return
+    try { setServers((await listMCP(user.token)) ?? []) }
+    catch (err) { setError(err instanceof Error ? err.message : 'Request failed.') }
+    finally { setLoading(false) }
+  }, [user])
 
   useEffect(() => {
     if (!user) { router.push('/'); return }
-    load()
-  }, [user])
+    let active = true
+    void Promise.resolve().then(() => { if (active) return load() })
+    return () => { active = false }
+  }, [user, router, load])
 
-  async function load() {
-    if (!user) return
-    try { setServers(await listMCP(user.token)) }
-    finally { setLoading(false) }
-  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
-    if (!user) return
+    if (!user || saving) return
+    setError('')
     setSaving(true)
     try {
-      await createMCP(user.token, { name, transport, url, command })
+      await createMCP(user.token, { name, transport: 'http', url })
       resetForm()
       setShowForm(false)
       load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Request failed.')
     } finally {
       setSaving(false)
     }
@@ -48,23 +54,34 @@ export default function SettingsPage() {
 
   async function handleToggle(srv: MCPServer) {
     if (!user) return
+    setError('')
+    try {
     await toggleMCP(user.token, srv.id, !srv.enabled)
     setServers((prev) => prev.map((s) => s.id === srv.id ? { ...s, enabled: !s.enabled } : s))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Request failed.')
+    }
   }
 
   async function handleDelete(id: string) {
     if (!user) return
+    setError('')
+    try {
     await deleteMCP(user.token, id)
     setServers((prev) => prev.filter((s) => s.id !== id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Request failed.')
+    }
   }
 
   function resetForm() {
-    setName(''); setUrl(''); setCommand(''); setTransport('http')
+    setName(''); setUrl('')
   }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <Navbar />
+      {error && <p role="alert" className="p-3 text-red-300">{error}</p>}
       <div className="max-w-3xl mx-auto px-6 py-10">
 
         {/* Header */}
@@ -105,7 +122,7 @@ export default function SettingsPage() {
               <Server size={36} className="text-zinc-700 mx-auto mb-3" />
               <p className="text-zinc-500 text-sm">No MCP servers connected yet.</p>
               <p className="text-zinc-700 text-xs mt-1">
-                Try: <code className="text-zinc-500">npx @modelcontextprotocol/server-filesystem</code>
+                Add a Streamable HTTP server URL, such as https://your-server.example/mcp.
               </p>
             </div>
           ) : (
@@ -176,40 +193,10 @@ export default function SettingsPage() {
                              placeholder:text-zinc-500 focus:outline-none focus:border-violet-500"
                 />
 
-                {/* Transport tabs */}
-                <div className="flex gap-1 bg-zinc-800 rounded-xl p-1">
-                  {(['http', 'stdio'] as const).map((t) => (
-                    <button
-                      key={t} type="button"
-                      onClick={() => setTransport(t)}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        transport === t
-                          ? 'bg-zinc-700 text-white'
-                          : 'text-zinc-500 hover:text-white'
-                      }`}
-                    >
-                      {t.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-
-                {transport === 'http' ? (
-                  <input
-                    value={url} onChange={(e) => setUrl(e.target.value)}
-                    placeholder="Server URL (e.g. http://localhost:3100)"
-                    required={transport === 'http'}
-                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-4 py-3 text-sm
-                               placeholder:text-zinc-500 focus:outline-none focus:border-violet-500"
-                  />
-                ) : (
-                  <input
-                    value={command} onChange={(e) => setCommand(e.target.value)}
-                    placeholder="Command (e.g. npx @modelcontextprotocol/server-filesystem /tmp)"
-                    required={transport === 'stdio'}
-                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-4 py-3 text-sm
-                               placeholder:text-zinc-500 focus:outline-none focus:border-violet-500 font-mono"
-                  />
-                )}
+                <p className="text-xs text-zinc-400">Streamable HTTP MCP endpoint</p>
+                <input value={url} onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://your-server.example/mcp" type="url" required
+                  className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-4 py-3 text-sm" />
 
                 <div className="flex gap-2 pt-1">
                   <button type="submit" disabled={saving}

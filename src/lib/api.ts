@@ -14,8 +14,9 @@ export async function apiFetch<T>(
   const res = await fetch(`${API}${path}`, { ...options, headers })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error(err.error ?? 'Request failed')
+    throw new Error(typeof err.error === 'string' ? err.error : `Request failed (${res.status})`)
   }
+  if (res.status === 204) return undefined as T
   return res.json()
 }
 
@@ -98,6 +99,8 @@ export interface Conversation {
   agent_id: string
   title: string
   created_at: string
+  message_count?: number
+  last_activity?: string
 }
 
 export interface Message {
@@ -106,6 +109,7 @@ export interface Message {
   role: string
   content: string
   tool_name: string
+  tool_call_id?: string
   created_at: string
 }
 
@@ -116,4 +120,44 @@ export interface Approval {
   action: string
   status: string
   created_at: string
+}
+
+export function getConversation(token: string, id: string) {
+  return apiFetch<Conversation>(`/conversations/${encodeURIComponent(id)}`, {}, token)
+}
+export function getAgent(token: string, id: string) {
+  return apiFetch<Agent>(`/agents/${encodeURIComponent(id)}`, {}, token)
+}
+export function desktopUrl(port: string) {
+  const base = process.env.NEXT_PUBLIC_DESKTOP_BASE_URL ?? API
+  const url = new URL(base)
+  url.port = String(port)
+  url.pathname = '/vnc.html'
+  url.search = 'autoconnect=1&resize=scale'
+  url.hash = ''
+  return url.toString()
+}
+
+export interface WorkspaceFile { path: string; name: string; size: number; modified: number }
+export function listWorkspaceFiles(token: string, agentId: string) {
+  return apiFetch<WorkspaceFile[]>(`/agents/${encodeURIComponent(agentId)}/files`, {}, token)
+}
+export async function fetchWorkspaceFile(token: string, agentId: string, path: string) {
+  const response = await fetch(`${API}/agents/${encodeURIComponent(agentId)}/files/download?path=${encodeURIComponent(path)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Download failed' }))
+    throw new Error(error.error ?? 'Download failed')
+  }
+  return response.blob()
+}
+export async function downloadWorkspaceFile(token: string, agentId: string, path: string) {
+  const blob = await fetchWorkspaceFile(token, agentId, path)
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = path.split('/').at(-1) ?? 'download'
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 30000)
 }
