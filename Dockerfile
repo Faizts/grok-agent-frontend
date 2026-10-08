@@ -8,7 +8,7 @@ COPY next.config.ts tsconfig.json postcss.config.mjs ./
 COPY src ./src
 COPY public ./public
 ARG NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1
-ARG NEXT_PUBLIC_WS_URL=ws://localhost:8080/api/v1/ws
+ARG NEXT_PUBLIC_WS_URL=
 ARG NEXT_PUBLIC_DESKTOP_BASE_URL=http://localhost
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL

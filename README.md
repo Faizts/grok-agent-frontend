@@ -52,3 +52,5 @@ npm run build
 ```
 
 Tests do not require additional packages. They cover reducer behavior, not a live browser/backend or Docker environment. End-to-end approval enforcement, sandbox startup, MCP connectivity and desktop access require the running backend and infrastructure.
+
+For separate Dokploy deployments, set `NEXT_PUBLIC_API_URL=https://api-agent.getvicinify.com/api/v1` as a frontend Docker build argument. Leave `NEXT_PUBLIC_WS_URL` empty to infer `wss://api-agent.getvicinify.com/api/v1/ws`, or set that exact endpoint explicitly at build time. Set backend `WS_ALLOWED_ORIGINS=https://agent.getvicinify.com`. Redeploy/rebuild both applications after changing these settings. A successful messages HTTP request does not establish a WebSocket connection; wrong socket URLs and rejected origins can leave chat reconnecting.

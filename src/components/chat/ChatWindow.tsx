@@ -6,11 +6,11 @@ import remarkGfm from 'remark-gfm'
 import { Terminal, Globe, Code, FileText, Search, Loader2, Send, Wifi, WifiOff, Bot, ChevronDown } from 'lucide-react'
 import { applyEvent, finishMessages, fromHistory, type ChatMessage, type StreamEvent } from '@/store/chat'
 import { ResponseFiles } from './ChatFiles'
-import { getMessages, downloadWorkspaceFile } from '@/lib/api'
+import { getMessages, downloadWorkspaceFile, API_URL } from '@/lib/api'
 import { useAuthStore } from '@/store/auth'
 import { cn } from '@/lib/utils'
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8080/api/v1/ws'
+import { webSocketBase } from '@/lib/connection'
 
 const TOOL_ICONS: Record<string, React.ReactNode> = {
   shell:      <Terminal size={13} />,
@@ -114,12 +114,14 @@ export function ChatWindow({ conversationId, agentId, botName = 'Assistant' }: {
         const history = await getMessages(user.token, conversationId)
         if (!active) return
         setMessages(fromHistory(history ?? []))
-        socket = new WebSocket(`${WS_URL}/${encodeURIComponent(conversationId)}?token=${encodeURIComponent(user.token)}`)
+        const socketBase = webSocketBase(API_URL, process.env.NEXT_PUBLIC_WS_URL)
+        socket = new WebSocket(`${socketBase}/${encodeURIComponent(conversationId)}?token=${encodeURIComponent(user.token)}`)
         ws.current = socket
         socket.onopen = () => {
           if (!active) return
           attempts = 0
           setConnected(true)
+          setError(current => current === 'Connection failed. Reconnecting…' ? '' : current)
           setLoading(false)
         }
         socket.onmessage = e => {
@@ -140,6 +142,7 @@ export function ChatWindow({ conversationId, agentId, botName = 'Assistant' }: {
           if (!active) return
           ws.current = null
           setConnected(false)
+          setLoading(false)
           if (busy.current) setError('Connection interrupted. The response may be incomplete; no message was resent.')
           finish()
           timer = setTimeout(connect, Math.min(1000 * 2 ** attempts++, 15000))
